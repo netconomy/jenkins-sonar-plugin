@@ -30,10 +30,12 @@ import hudson.model.Hudson;
 import hudson.model.JDK;
 import hudson.plugins.sonar.utils.ExtendedArgumentListBuilder;
 import hudson.plugins.sonar.utils.Logger;
+import hudson.plugins.sonar.utils.PathResolverOperator;
 import hudson.plugins.sonar.utils.SonarUtils;
 import hudson.tasks.BuildStepDescriptor;
 import hudson.tasks.Builder;
 import hudson.util.ArgumentListBuilder;
+import org.apache.commons.lang.BooleanUtils;
 import org.apache.commons.lang.StringUtils;
 import org.kohsuke.stapler.DataBoundConstructor;
 
@@ -354,14 +356,22 @@ public class SonarRunnerBuilder extends Builder {
     // Additional properties
     Properties p = new Properties();
     p.load(new ByteArrayInputStream(env.expand(getProperties()).getBytes()));
-    loadProperties(args, p);
+    loadProperties(args, p, build);
 
     return true;
   }
 
-  private void loadProperties(ExtendedArgumentListBuilder args, Properties p) {
+  private void loadProperties(ExtendedArgumentListBuilder args, Properties p, AbstractBuild<?, ?> build) throws IOException, InterruptedException{
+    boolean resolvePath = BooleanUtils.toBoolean(StringUtils.trim(p.getProperty("sonar.resolvePath")));
+
     for (Entry<Object, Object> entry : p.entrySet()) {
-      args.append(entry.getKey().toString(), entry.getValue().toString());
+      String value = entry.getValue().toString();
+      String key = entry.getKey().toString();
+      if (resolvePath) {
+        PathResolverOperator resolver = new PathResolverOperator(build.getWorkspace());
+        value = resolver.resolvePath(key, value);
+      }
+      args.append(key, value);
     }
   }
 

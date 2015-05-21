@@ -25,9 +25,7 @@ import org.apache.commons.collections.MapUtils;
 import org.apache.commons.lang.StringUtils;
 
 import java.io.IOException;
-import java.util.Collections;
-import java.util.Map;
-import java.util.Set;
+import java.util.*;
 
 /**
  * Class which resolves wildcards for the given path pattern
@@ -38,17 +36,23 @@ import java.util.Set;
 public class PathResolverOperator {
 
     public static final String SONAR_TEST = "sonar.tests";
-    public static final String SONAR_BINARIES = "sonar.binaries";
     public static final String SONAR_SOURCES = "sonar.sources";
-    public static final String SONAR_LIBRARIES = "sonar.libraries";
+    public static final String SONAR_JAVA_BINARIES = "sonar.java.binaries";
+    public static final String SONAR_JAVA_LIBRARIES = "sonar.java.libraries";
+    public static final String SONAR_JAVA_BINARIES_INCLUDE = "sonar.java.binaries.include";
+    public static final String SONAR_JAVA_BINARIES_EXCLUDE = "sonar.java.binaries.exclude";
+    public static final String SONAR_JAVA_LIBRARIES_INCLUDE = "sonar.java.libraries.include";
+    public static final String SONAR_JAVA_LIBRARIES_EXCLUDE = "sonar.java.libraries.exclude";
 
-    private static final Set<String> PATH_PROPERTIES = Sets.newHashSet(SONAR_TEST, SONAR_BINARIES, SONAR_SOURCES, SONAR_LIBRARIES);
+    private static final Set<String> PATH_PROPERTIES = Sets.newHashSet(SONAR_TEST, SONAR_SOURCES, SONAR_JAVA_BINARIES_EXCLUDE, SONAR_JAVA_BINARIES_INCLUDE, SONAR_JAVA_LIBRARIES_INCLUDE, SONAR_JAVA_LIBRARIES_EXCLUDE);
 
     private Map<String, PathResolver> resolverMap = createResolverMap();
+    private Joiner joiner = Joiner.on(",");
 
     protected Map<String, PathResolver> createResolverMap() {
         Map<String, PathResolver> resolverMap = Maps.newHashMap();
-        resolverMap.put(SONAR_LIBRARIES, new LibraryPathResolver());
+        resolverMap.put(SONAR_JAVA_LIBRARIES_INCLUDE, new LibraryPathResolver());
+        resolverMap.put(SONAR_JAVA_LIBRARIES_EXCLUDE, new LibraryPathResolver());
         return resolverMap;
     }
 
@@ -67,14 +71,41 @@ public class PathResolverOperator {
         this.workspace = workspace;
     }
 
+    public Properties resolvePaths(Properties prop) throws IOException, InterruptedException {
+        Properties result = new Properties();
+        Map<String, Set<String>> rawResults = Maps.newHashMap();
+        for (Map.Entry<Object, Object> entry : prop.entrySet()) {
+            String key = entry.getKey().toString();
+            if (!PATH_PROPERTIES.contains(key)) {
+                result.put(key, entry.getValue());
+                continue;
+            }
+
+            String value = entry.getValue().toString();
+            rawResults.put(key, doResolvePathSegments(key, value));
+        }
+
+        rawResults = mergeInternalProperties(rawResults);
+
+        for (Map.Entry<String, Set<String>> rawEntry : rawResults.entrySet()) {
+            result.put(rawEntry.getKey(), joiner.join(rawEntry.getValue()));
+        }
+        return result;
+    }
+
     public String resolvePath(String key, String value) throws IOException, InterruptedException {
+        Set<String> result = doResolvePathSegments(key, value);
+        return joiner.join(result);
+    }
+
+    protected Set<String> doResolvePathSegments(String key, String value) throws IOException, InterruptedException {
         if (!PATH_PROPERTIES.contains(key)) {
-            return value;
+            return Sets.newHashSet(value);
         }
 
         String trimmedValue = StringUtils.trim(value);
         if (StringUtils.isEmpty(trimmedValue)) {
-            return value;
+            return Sets.newHashSet(value);
         }
 
         Iterable<String> pathIterable = Splitter.on(",").trimResults().omitEmptyStrings().split(trimmedValue);
@@ -82,8 +113,7 @@ public class PathResolverOperator {
         for (String path : pathIterable) {
             result.addAll(doResolvePath(key, path));
         }
-
-        return Joiner.on(",").join(result);
+        return result;
     }
 
     protected Set<String> doResolvePath(String key, String path) throws IOException, InterruptedException {
@@ -96,6 +126,30 @@ public class PathResolverOperator {
         }
 
         return Collections.emptySet();
+    }
+
+    protected Map<String, Set<String>> mergeInternalProperties(Map<String, Set<String>> rawResults) {
+        Map<String, Set<String>> resultMap;
+        resultMap = mergeInternalProperty(rawResults, SONAR_JAVA_BINARIES, SONAR_JAVA_BINARIES_INCLUDE, SONAR_JAVA_BINARIES_EXCLUDE);
+        resultMap = mergeInternalProperty(resultMap, SONAR_JAVA_LIBRARIES, SONAR_JAVA_LIBRARIES_INCLUDE, SONAR_JAVA_LIBRARIES_EXCLUDE);
+        return resultMap;
+    }
+
+    protected Map<String, Set<String>> mergeInternalProperty(Map<String, Set<String>> rawResults, String mergedKey, String includeKey, String excludeKey) {
+        Map<String, Set<String>> resultMap = Maps.newHashMap(rawResults);
+        Set<String> mergedSet = retrieveSet(rawResults, mergedKey);
+        mergedSet.addAll(retrieveSet(rawResults, includeKey));
+        mergedSet.removeAll(retrieveSet(rawResults, excludeKey));
+
+        resultMap.put(mergedKey, mergedSet);
+        resultMap.remove(includeKey);
+        resultMap.remove(excludeKey);
+        return resultMap;
+    }
+
+    protected Set<String> retrieveSet(Map<String, Set<String>> map, String key) {
+        Set<String> retrievedSet = map.get(key);
+        return retrievedSet != null ? retrievedSet : new HashSet<String>();
     }
 
     public FilePath getWorkspace() {

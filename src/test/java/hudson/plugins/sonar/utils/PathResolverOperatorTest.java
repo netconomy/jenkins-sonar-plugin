@@ -16,6 +16,7 @@
 package hudson.plugins.sonar.utils;
 
 import com.google.common.collect.Maps;
+import com.google.common.collect.Sets;
 import hudson.FilePath;
 import org.apache.commons.io.FileUtils;
 import org.junit.After;
@@ -24,12 +25,13 @@ import org.junit.Test;
 
 import java.io.File;
 import java.io.IOException;
-import java.util.Collections;
-import java.util.Map;
-import java.util.Set;
+import java.util.*;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNotNull;
+import static hudson.plugins.sonar.utils.PathResolverOperator.*;
+import static hudson.plugins.sonar.utils.PathResolverOperator.SONAR_JAVA_BINARIES_EXCLUDE;
+import static org.hamcrest.Matchers.is;
+import static org.hamcrest.Matchers.notNullValue;
+import static org.junit.Assert.*;
 
 public class PathResolverOperatorTest {
 
@@ -105,5 +107,69 @@ public class PathResolverOperatorTest {
         assertEquals(Collections.emptySet(), result);
     }
 
+    @Test
+    public void testRetrieveSet() {
+        Map<String, Set<String>> sampleData = Maps.newHashMap();
+        Set<String> set1 = Sets.newHashSet("value1");
+        sampleData.put("keyWithValues", set1);
+
+        assertThat(resolverOperator.retrieveSet(sampleData, "keyWithValues"), is(set1));
+        assertThat(resolverOperator.retrieveSet(sampleData, "someValues"), notNullValue());
+    }
+
+    @Test
+    public void testMergeInternalProperty() {
+        final String mergedSetKey = "mergedSet";
+        Map<String, Set<String>> sampleData = Maps.newHashMap();
+        sampleData.put("includeSet", Sets.newHashSet("value1", "value2"));
+        sampleData.put("excludeSet", Sets.newHashSet("value2", "value3"));
+
+        sampleData.put(mergedSetKey, Sets.newHashSet("value3", "value4"));
+
+        Map<String, Set<String>> result = resolverOperator.mergeInternalProperty(sampleData, mergedSetKey, "includeSet", "excludeSet");
+        assertNotNull(result);
+        assertEquals(1, result.size());
+        Set<String> resultSet = result.get(mergedSetKey);
+        assertNotNull(resultSet);
+
+        assertEquals(2, resultSet.size());
+        assertTrue(resultSet.containsAll(Sets.newHashSet("value1", "value4")));
+    }
+
+    @Test
+    public void testMergeInternalProperties() {
+        Map<String, Set<String>> sampleData = Maps.newHashMap();
+        sampleData.put(SONAR_JAVA_BINARIES_INCLUDE, null);
+        sampleData.put(SONAR_JAVA_LIBRARIES_EXCLUDE, null);
+        sampleData.put(SONAR_JAVA_LIBRARIES_INCLUDE, new HashSet<String>());
+
+        Map<String, Set<String>> result = resolverOperator.mergeInternalProperties(sampleData);
+        assertNotNull(result);
+        assertEquals(2, result.size());
+        assertNotNull(result.get(SONAR_JAVA_BINARIES));
+        assertNotNull(result.get(SONAR_JAVA_LIBRARIES));
+    }
+
+    @Test
+    public void testResolvePaths() throws IOException, InterruptedException {
+        Properties input = new Properties();
+        input.put("untouchedKey", "untouchedValue");
+        input.put("anotherKey", "anotherValue");
+        input.put(SONAR_JAVA_BINARIES_INCLUDE, "lib1,lib2");
+        input.put(SONAR_JAVA_BINARIES_EXCLUDE, "lib2");
+
+        Map<String, PathResolver> resolverMap = Maps.newHashMap();
+        resolverMap.put(SONAR_JAVA_BINARIES_INCLUDE, new MockAbstractPathResolver("lib1", "lib2"));
+        resolverMap.put(SONAR_JAVA_BINARIES_EXCLUDE, new MockAbstractPathResolver("lib2"));
+        this.resolverOperator.setResolverMap(resolverMap);
+
+        Properties result = this.resolverOperator.resolvePaths(input);
+
+        assertEquals(4, result.size());
+        assertEquals("untouchedValue", result.getProperty("untouchedKey"));
+        assertEquals("anotherValue", result.getProperty("anotherKey"));
+        assertEquals("lib1", result.getProperty(SONAR_JAVA_BINARIES));
+        assertEquals("", result.getProperty(SONAR_JAVA_LIBRARIES));
+    }
 
 }

@@ -32,6 +32,10 @@ public class MockAbstractPathResolver extends AbstractPathResolver {
         returnValue = Sets.newHashSet(mockValue);
     }
 
+    public MockAbstractPathResolver(String... mockValues){
+        returnValue = Sets.newHashSet(mockValues);
+    }
+
     public MockAbstractPathResolver(Set<String> mockValue) {
         returnValue = Sets.newHashSet(mockValue);
     }

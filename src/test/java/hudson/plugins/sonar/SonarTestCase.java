@@ -1,4 +1,22 @@
 /*
+ * Jenkins Plugin for SonarQube, open source software quality management tool.
+ * mailto:contact AT sonarsource DOT com
+ *
+ * Jenkins Plugin for SonarQube is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU Lesser General Public
+ * License as published by the Free Software Foundation; either
+ * version 3 of the License, or (at your option) any later version.
+ *
+ * Jenkins Plugin for SonarQube is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ * Lesser General Public License for more details.
+ *
+ * You should have received a copy of the GNU Lesser General Public License
+ * along with this program; if not, write to the Free Software Foundation,
+ * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+ */
+/*
  * Sonar is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
  * License as published by the Free Software Foundation; either
@@ -34,7 +52,7 @@ import org.jvnet.hudson.test.SingleFileSCM;
 import java.io.File;
 import java.io.IOException;
 
-import static org.fest.assertions.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThat;
 
 /**
  * @author Evgeny Mandrikov
@@ -72,12 +90,30 @@ public abstract class SonarTestCase {
   }
 
   protected SonarInstallation configureDefaultSonar() {
-    return configureSonar(new SonarInstallation(SONAR_INSTALLATION_NAME));
+    return configureSonar(new SonarInstallation(SONAR_INSTALLATION_NAME, false, null, null, null, null, null, null, null, null, null));
   }
 
   protected SonarInstallation configureSonar(SonarInstallation sonarInstallation) {
     j.jenkins.getDescriptorByType(SonarPublisher.DescriptorImpl.class).setInstallations(sonarInstallation);
     return sonarInstallation;
+  }
+
+  /**
+   * Returns Fake Maven Installation.
+   *
+   * @return Fake Maven Installation
+   * @throws Exception if something is wrong
+   */
+  protected SonarRunnerInstallation configureDefaultSonarRunner(boolean broken) throws Exception {
+    File exe = new File(getClass().getResource("SonarTestCase/sonar-runner" + (broken ? "-broken" : "") + "/bin/sonar-runner").toURI().getPath());
+    if (!Functions.isWindows()) {
+      // noinspection OctalInteger
+      GNUCLibrary.LIBC.chmod(exe.getPath(), 0755);
+    }
+    String home = exe.getParentFile().getParentFile().getAbsolutePath();
+    SonarRunnerInstallation runnerInstallation = new SonarRunnerInstallation("default", home, JenkinsRule.NO_PROPERTIES);
+    j.jenkins.getDescriptorByType(SonarRunnerInstallation.DescriptorImpl.class).setInstallations(runnerInstallation);
+    return runnerInstallation;
   }
 
   protected MavenModuleSet setupMavenProject() throws Exception {
@@ -102,15 +138,11 @@ public abstract class SonarTestCase {
   }
 
   protected FreeStyleProject setupFreeStyleProject() throws Exception {
-    return setupFreeStyleProject(ROOT_POM);
-  }
-
-  protected FreeStyleProject setupFreeStyleProject(String pomName) throws Exception {
     FreeStyleProject project = j.createFreeStyleProject("FreeStyleProject");
     // Setup SCM
     project.setScm(new NullSCM());
-    // Setup Sonar
-    project.getPublishersList().add(newSonarPublisherForFreeStyleProject(pomName));
+    // Setup SonarQube step
+    project.getBuildersList().add(new SonarRunnerBuilder(null, null, null, null, null, null, null));
     return project;
   }
 
@@ -131,18 +163,22 @@ public abstract class SonarTestCase {
   }
 
   protected static SonarPublisher newSonarPublisherForMavenProject() {
-    return new SonarPublisher(SONAR_INSTALLATION_NAME, null, null);
+    return new SonarPublisher(SONAR_INSTALLATION_NAME, null, null, null, null, null, null, null, null, null, false);
   }
 
   protected static SonarPublisher newSonarPublisherForFreeStyleProject(String pomName) {
     return new SonarPublisher(
       SONAR_INSTALLATION_NAME,
+      null,
       new TriggersConfig(),
       null,
       null,
       "default", // Maven Installation Name
-      pomName // Root POM
-    );
+      pomName, // Root POM
+      null,
+      null,
+      null,
+      false);
   }
 
   /**
@@ -152,26 +188,24 @@ public abstract class SonarTestCase {
    * @param args command line arguments
    * @throws Exception if something is wrong
    */
-  protected void assertSonarExecution(AbstractBuild<?, ?> build, String args) throws Exception {
+  protected void assertSonarExecution(AbstractBuild<?, ?> build, String args, boolean success) throws Exception {
     // Check command line arguments
-    assertLogContains(args + " -e -B", build);
-    // Check that plugin was invoked
-    assertLogContains("sonar:sonar", build);
+    assertLogContains(args, build);
 
-    // Check that Sonar Plugin started
-    // assertLogContains("[INFO] Sonar host: " + SONAR_HOST, build);
-
-    // SONARPLUGINS-320: Check that small badge was added to build history
-    assertThat(build.getAction(BuildSonarAction.class)).as(BuildSonarAction.class.getSimpleName() + " not found").isNotNull();
-
+    if (success) {
+      // SONARPLUGINS-320: Check that small badge was added to build history
+      assertThat(build.getAction(BuildSonarAction.class)).as(BuildSonarAction.class.getSimpleName() + " not found").isNotNull();
+    } else {
+      // SONARJNKNS-203 Do not add link if build has failed
+      assertThat(build.getAction(BuildSonarAction.class)).as(BuildSonarAction.class.getSimpleName() + " not found").isNull();
+    }
     // SONARPLUGINS-165: Check that link added to project
-    // FIXME Godin: I don't know why, but this don't work for FreeStyleProject
-    // AbstractProject project = build.getProject();
-    // assertNotNull(project.getAction(ProjectSonarAction.class));
+    AbstractProject project = build.getProject();
+    assertThat(project.getAction(ProjectSonarAction.class)).isNotNull();
   }
 
-  protected void assertSonarExecution(AbstractBuild<?, ?> build) throws Exception {
-    assertSonarExecution(build, "");
+  protected void assertSonarExecution(AbstractBuild<?, ?> build, boolean success) throws Exception {
+    assertSonarExecution(build, "", success);
   }
 
   protected void assertNoSonarExecution(AbstractBuild<?, ?> build, String cause) throws Exception {

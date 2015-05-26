@@ -1,6 +1,6 @@
 <j:jelly xmlns:j="jelly:core" xmlns:st="jelly:stapler" xmlns:d="jelly:define" xmlns:l="/lib/layout"
          xmlns:t="/lib/hudson" xmlns:f="/lib/form">
-  <f:section title="Sonar">
+  <f:section title="SonarQube">
     <f:entry title="${%SonarInstallations}" description="${%SonarInstallationsDescr}">
       <f:repeatable var="inst" items="${descriptor.installations}" add="${%AddSonar}">
         <table width="100%">
@@ -37,11 +37,6 @@
 
             <f:entry title="${%DbPass}" description="${%DbPassDescr}">
               <f:password name="sonar.databasePassword" value="${inst.getDatabasePassword()}"/>
-            </f:entry>
-
-            <f:entry title="${%DbDriver}" description="${%DbDriverDescr}"
-                     help="/plugin/sonar/help-global-dbdriver.html">
-              <f:textbox name="sonar.databaseDriver" value="${inst.getDatabaseDriver()}"/>
             </f:entry>
 
             <f:entry title="${%MojoVersion}" description="${%MojoVersionDescr}">

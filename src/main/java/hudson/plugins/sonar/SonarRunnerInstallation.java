@@ -1,4 +1,22 @@
 /*
+ * Jenkins Plugin for SonarQube, open source software quality management tool.
+ * mailto:contact AT sonarsource DOT com
+ *
+ * Jenkins Plugin for SonarQube is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU Lesser General Public
+ * License as published by the Free Software Foundation; either
+ * version 3 of the License, or (at your option) any later version.
+ *
+ * Jenkins Plugin for SonarQube is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ * Lesser General Public License for more details.
+ *
+ * You should have received a copy of the GNU Lesser General Public License
+ * along with this program; if not, write to the Free Software Foundation,
+ * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+ */
+/*
  * Sonar is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
  * License as published by the Free Software Foundation; either
@@ -15,21 +33,16 @@
  */
 package hudson.plugins.sonar;
 
-import hudson.CopyOnWrite;
-import hudson.EnvVars;
-import hudson.Extension;
-import hudson.Functions;
-import hudson.Launcher;
-import hudson.Util;
+import hudson.*;
 import hudson.model.EnvironmentSpecific;
 import hudson.model.TaskListener;
 import hudson.model.Node;
-import hudson.remoting.Callable;
 import hudson.slaves.NodeSpecific;
-import hudson.tools.ToolDescriptor;
 import hudson.tools.ToolInstaller;
 import hudson.tools.ToolProperty;
+import hudson.tools.ToolDescriptor;
 import hudson.tools.ToolInstallation;
+import jenkins.security.MasterToSlaveCallable;
 import net.sf.json.JSONObject;
 import org.kohsuke.stapler.DataBoundConstructor;
 import org.kohsuke.stapler.StaplerRequest;
@@ -49,15 +62,12 @@ public class SonarRunnerInstallation extends ToolInstallation implements Environ
     super(Util.fixEmptyAndTrim(name), Util.fixEmptyAndTrim(home), properties);
   }
 
-  public File getHomeDir() {
-    return new File(getHome());
-  }
-
   /**
   * Gets the executable path of this Sonar runner on the given target system.
   */
   public String getExecutable(Launcher launcher) throws IOException, InterruptedException {
-    return launcher.getChannel().call(new Callable<String, IOException>() {
+    return launcher.getChannel().call(new MasterToSlaveCallable<String, IOException>() {
+      @Override
       public String call() throws IOException {
         File exe = getExeFile();
         if (exe.exists()) {
@@ -77,10 +87,12 @@ public class SonarRunnerInstallation extends ToolInstallation implements Environ
 
   private static final long serialVersionUID = 1L;
 
+  @Override
   public SonarRunnerInstallation forEnvironment(EnvVars environment) {
     return new SonarRunnerInstallation(getName(), environment.expand(getHome()), getProperties().toList());
   }
 
+  @Override
   public SonarRunnerInstallation forNode(Node node, TaskListener log) throws IOException, InterruptedException {
     return new SonarRunnerInstallation(getName(), translateFor(node, log), getProperties().toList());
   }
@@ -96,7 +108,7 @@ public class SonarRunnerInstallation extends ToolInstallation implements Environ
 
     @Override
     public String getDisplayName() {
-      return "Sonar Runner";
+      return "SonarQube Runner";
     }
 
     @Override

@@ -1,4 +1,22 @@
 /*
+ * Jenkins Plugin for SonarQube, open source software quality management tool.
+ * mailto:contact AT sonarsource DOT com
+ *
+ * Jenkins Plugin for SonarQube is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU Lesser General Public
+ * License as published by the Free Software Foundation; either
+ * version 3 of the License, or (at your option) any later version.
+ *
+ * Jenkins Plugin for SonarQube is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ * Lesser General Public License for more details.
+ *
+ * You should have received a copy of the GNU Lesser General Public License
+ * along with this program; if not, write to the Free Software Foundation,
+ * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+ */
+/*
  * Sonar is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
  * License as published by the Free Software Foundation; either
@@ -22,12 +40,11 @@ import hudson.model.FreeStyleProject;
 import hudson.tasks.Mailer;
 import jenkins.model.JenkinsLocationConfiguration;
 import org.junit.Before;
-import org.junit.Ignore;
 import org.junit.Test;
-import org.jvnet.hudson.test.Bug;
+import org.jvnet.hudson.test.Issue;
 import org.jvnet.mock_javamail.Mailbox;
 
-import static org.fest.assertions.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThat;
 
 /**
  * SONARPLUGINS-286:
@@ -39,7 +56,7 @@ import static org.fest.assertions.Assertions.assertThat;
  *
  * @author Evgeny Mandrikov
  */
-@Bug(286)
+@Issue("SONARJNKNS-149")
 public class MailTest extends SonarTestCase {
   private Mailbox inbox;
   private Mailer mailer;
@@ -47,23 +64,23 @@ public class MailTest extends SonarTestCase {
   @Before
   public void setUp() throws Exception {
     configureDefaultMaven();
+    configureDefaultSonarRunner(true);
     configureDefaultSonar();
     // Configure Mailer and Mailbox
     JenkinsLocationConfiguration.get().setAdminAddress("admin@example.org");
     String recipient = "me@example.org";
     inbox = Mailbox.get(recipient);
-    mailer = new Mailer();
-    mailer.recipients = "me@example.org";
+    mailer = new Mailer("me@example.org", true, false);
   }
 
-  @Ignore("Ingored due to changes in triggers")
-  public void ignore_testMavenProject() throws Exception {
+  @Test
+  public void testMavenProject() throws Exception {
     MavenModuleSet project = setupMavenProject();
     project.getPublishersList().add(mailer);
     inbox.clear();
     AbstractBuild<?, ?> build = build(project, Result.FAILURE);
 
-    assertSonarExecution(build, "-f " + getPom(build, "pom.xml"));
+    assertSonarExecution(build, false);
     assertThat(inbox.size()).isEqualTo(1);
   }
 
@@ -74,7 +91,7 @@ public class MailTest extends SonarTestCase {
     inbox.clear();
     AbstractBuild<?, ?> build = build(project, Result.FAILURE);
 
-    assertSonarExecution(build, "-f " + getPom(build, "sonar-pom.xml"));
+    assertSonarExecution(build, "sonar-runner", false);
     assertThat(inbox.size()).isEqualTo(1);
   }
 }

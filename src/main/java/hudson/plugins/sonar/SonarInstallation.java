@@ -1,4 +1,22 @@
 /*
+ * Jenkins Plugin for SonarQube, open source software quality management tool.
+ * mailto:contact AT sonarsource DOT com
+ *
+ * Jenkins Plugin for SonarQube is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU Lesser General Public
+ * License as published by the Free Software Foundation; either
+ * version 3 of the License, or (at your option) any later version.
+ *
+ * Jenkins Plugin for SonarQube is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ * Lesser General Public License for more details.
+ *
+ * You should have received a copy of the GNU Lesser General Public License
+ * along with this program; if not, write to the Free Software Foundation,
+ * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+ */
+/*
  * Sonar is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
  * License as published by the Free Software Foundation; either
@@ -16,9 +34,10 @@
 package hudson.plugins.sonar;
 
 import hudson.Util;
-import hudson.model.Hudson;
 import hudson.plugins.sonar.model.TriggersConfig;
 import hudson.util.Scrambler;
+import hudson.util.Secret;
+import jenkins.model.Jenkins;
 import org.apache.commons.lang.StringUtils;
 import org.kohsuke.stapler.DataBoundConstructor;
 
@@ -29,12 +48,12 @@ public class SonarInstallation {
    * @since 1.7
    */
   public static final SonarInstallation[] all() {
-    Hudson hudson = Hudson.getInstance();
-    if (hudson == null) {
+    Jenkins jenkins = Jenkins.getInstance();
+    if (jenkins == null) {
       // for unit test
       return new SonarInstallation[0];
     }
-    SonarPublisher.DescriptorImpl sonarDescriptor = Hudson.getInstance().getDescriptorByType(SonarPublisher.DescriptorImpl.class);
+    SonarPublisher.DescriptorImpl sonarDescriptor = Jenkins.getInstance().getDescriptorByType(SonarPublisher.DescriptorImpl.class);
     return sonarDescriptor.getInstallations();
   }
 
@@ -65,9 +84,13 @@ public class SonarInstallation {
   private String mojoVersion;
 
   private final String databaseUrl;
-  private final String databaseDriver;
   private final String databaseLogin;
-  private String databasePassword;
+
+  /**
+   * @deprecated since 2.2
+   */
+  @Deprecated
+  private transient String databasePassword;
   private final String additionalProperties;
 
   private TriggersConfig triggers;
@@ -76,39 +99,29 @@ public class SonarInstallation {
    * @since 2.0.1
    */
   private String sonarLogin;
-  private String sonarPassword;
 
   /**
-   * @deprecated in 2.0
+   * @deprecated since 2.2
    */
   @Deprecated
-  public SonarInstallation(String name) {
-    this(name, false, null, null, null, null, null, null, null, null);
-  }
+  private transient String sonarPassword;
 
   /**
-   * @deprecated in 2.0.1
+   * @since 2.2
    */
-  @Deprecated
-  public SonarInstallation(String name, boolean disabled,
-      String serverUrl,
-      String databaseUrl, String databaseDriver, String databaseLogin, String databasePassword,
-      String mojoVersion, String additionalProperties, TriggersConfig triggers) {
-    this(name, disabled, serverUrl, databaseUrl, databaseDriver, databaseLogin, databasePassword, mojoVersion, additionalProperties,
-        triggers, null, null);
-  }
+  private Secret databaseSecret;
+  private Secret sonarSecret;
 
   @DataBoundConstructor
   public SonarInstallation(String name, boolean disabled,
-      String serverUrl,
-      String databaseUrl, String databaseDriver, String databaseLogin, String databasePassword,
-      String mojoVersion, String additionalProperties, TriggersConfig triggers,
-      String sonarLogin, String sonarPassword) {
+    String serverUrl,
+    String databaseUrl, String databaseLogin, String databasePassword,
+    String mojoVersion, String additionalProperties, TriggersConfig triggers,
+    String sonarLogin, String sonarPassword) {
     this.name = name;
     this.disabled = disabled;
     this.serverUrl = serverUrl;
     this.databaseUrl = databaseUrl;
-    this.databaseDriver = databaseDriver;
     this.databaseLogin = databaseLogin;
     setDatabasePassword(databasePassword);
     this.mojoVersion = mojoVersion;
@@ -142,23 +155,19 @@ public class SonarInstallation {
     return databaseUrl;
   }
 
-  public String getDatabaseDriver() {
-    return databaseDriver;
-  }
-
   public String getDatabaseLogin() {
     return databaseLogin;
   }
 
   public String getDatabasePassword() {
-    return Scrambler.descramble(databasePassword);
+    return Secret.toString(databaseSecret);
   }
 
   /**
    * @since 1.7
    */
   public final void setDatabasePassword(String password) {
-    this.databasePassword = Scrambler.scramble(Util.fixEmptyAndTrim(password));
+    databaseSecret = Secret.fromString(Util.fixEmptyAndTrim(password));
   }
 
   /**
@@ -167,7 +176,7 @@ public class SonarInstallation {
    * @since 1.7
    */
   public String getScrambledDatabasePassword() {
-    return databasePassword;
+    return databaseSecret.getEncryptedValue();
   }
 
   public String getAdditionalProperties() {
@@ -192,10 +201,27 @@ public class SonarInstallation {
    * @since 2.0.1
    */
   public String getSonarPassword() {
-    return Scrambler.descramble(sonarPassword);
+    return Secret.toString(sonarSecret);
   }
 
   public final void setSonarPassword(String sonarPassword) {
-    this.sonarPassword = Scrambler.scramble(Util.fixEmptyAndTrim(sonarPassword));
+    sonarSecret = Secret.fromString(Util.fixEmptyAndTrim(sonarPassword));
+  }
+
+  private Object readResolve() {
+    // Perform password migration to Secret (SONARJNKNS-201)
+    // Data will be persisted when SonarPublisher.DescriptorImpl is saved.
+
+    if (databasePassword != null) {
+      setDatabasePassword(Scrambler.descramble(databasePassword));
+      databasePassword = null;
+    }
+
+    if (sonarPassword != null) {
+      setSonarPassword(Scrambler.descramble(sonarPassword));
+      sonarPassword = null;
+    }
+
+    return this;
   }
 }

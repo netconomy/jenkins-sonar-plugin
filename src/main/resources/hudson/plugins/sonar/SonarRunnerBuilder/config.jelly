@@ -1,9 +1,9 @@
 <j:jelly xmlns:j="jelly:core" xmlns:st="jelly:stapler" xmlns:d="jelly:define" xmlns:l="/lib/layout" xmlns:t="/lib/hudson" xmlns:f="/lib/form">
 
-  <!-- Sonar Installation -->
+  <!-- SonarQube Installation -->
   <j:set var="sonars" value="${descriptor.getSonarInstallations()}"/>
   <j:if test="${empty(sonars)}">
-    <!-- no Sonar installation is configured, so warn the user now -->
+    <!-- no SonarQube installation is configured, so warn the user now -->
     <f:entry title="${%SonarInstallation}">
       <div class="error">${%SonarInstallation.error(rootURL)}</div>
     </f:entry>
@@ -27,7 +27,7 @@
   <!-- JDK -->
   <j:set var="jdks" value="${app.JDKs}" />
   <f:entry title="JDK" description="${%JDKDesc}" help="/plugin/sonar/help-sonar-jdk.html">
-    <select class="setting-input validated" name="jdk" checkUrl="'${rootURL}/defaultJDKCheck?value='+this.value">
+    <select class="setting-input validated" name="sonar.jdk" checkUrl="'${rootURL}/defaultJDKCheck?value='+this.value">
       <option>${%InheritFromJob}</option>
       <j:forEach var="inst" items="${jdks}">
         <f:option selected="${inst.name==instance.JDK.name}" value="${inst.name}">${inst.name}</f:option>
@@ -35,7 +35,7 @@
     </select>
   </f:entry>
 
-  <!-- Sonar Runner -->
+  <!-- SonarQube Runner -->
   <j:set var="runners" value="${descriptor.getSonarRunnerInstallations()}" />
   <j:if test="${empty(runners)}">
     <!-- no runner installation is configured. this will be an error, so warn the user now -->
@@ -61,7 +61,7 @@
     <f:textbox />
   </f:entry>
 
-  <f:entry title="${%ProjectProperties}" field="properties" help="/plugin/sonar/help-runner-properties.html">
+  <f:entry title="${%AnalysisProperties}" field="properties" help="/plugin/sonar/help-runner-properties.html">
     <f:textarea />
   </f:entry>
 

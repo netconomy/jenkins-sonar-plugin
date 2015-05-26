@@ -1,4 +1,22 @@
 /*
+ * Jenkins Plugin for SonarQube, open source software quality management tool.
+ * mailto:contact AT sonarsource DOT com
+ *
+ * Jenkins Plugin for SonarQube is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU Lesser General Public
+ * License as published by the Free Software Foundation; either
+ * version 3 of the License, or (at your option) any later version.
+ *
+ * Jenkins Plugin for SonarQube is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ * Lesser General Public License for more details.
+ *
+ * You should have received a copy of the GNU Lesser General Public License
+ * along with this program; if not, write to the Free Software Foundation,
+ * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+ */
+/*
  * Sonar is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
  * License as published by the Free Software Foundation; either
@@ -26,10 +44,11 @@ import hudson.plugins.sonar.utils.ExtendedArgumentListBuilder;
 import hudson.scm.SCM;
 import hudson.util.ArgumentListBuilder;
 import org.apache.commons.io.FileUtils;
-import org.fest.util.Files;
 import org.junit.After;
 import org.junit.Before;
+import org.junit.Rule;
 import org.junit.Test;
+import org.junit.rules.TemporaryFolder;
 import org.mockito.Mockito;
 import org.mockito.invocation.InvocationOnMock;
 import org.mockito.stubbing.Answer;
@@ -37,13 +56,16 @@ import org.mockito.stubbing.Answer;
 import java.io.File;
 import java.io.IOException;
 
-import static org.fest.assertions.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Matchers.any;
 import static org.mockito.Matchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 public class SonarRunnerBuilderTest {
+
+  @Rule
+  public TemporaryFolder temp = new TemporaryFolder();
 
   private File moduleDir;
   private ExtendedArgumentListBuilder argsBuilder;
@@ -55,7 +77,7 @@ public class SonarRunnerBuilderTest {
 
   @Before
   public void prepareMockWorkspace() throws IOException {
-    workspace = Files.newTemporaryFolder();
+    workspace = temp.newFolder();
     moduleDir = new File(workspace, "trunk");
     FileUtils.forceMkdir(moduleDir);
     args = new ArgumentListBuilder();
@@ -80,13 +102,6 @@ public class SonarRunnerBuilderTest {
   public void shouldBeEmptyInsteadOfNull() {
     SonarRunnerBuilder builder = new SonarRunnerBuilder(null, null, null, null, null, null, null);
     assertEmptyInsteadOfNull(builder);
-    // Test other constructors
-    builder = new SonarRunnerBuilder(null, null, null, null);
-    assertEmptyInsteadOfNull(builder);
-    builder = new SonarRunnerBuilder(null, null, null, null, null);
-    assertEmptyInsteadOfNull(builder);
-    builder = new SonarRunnerBuilder(null, null, null, null, null, null);
-    assertEmptyInsteadOfNull(builder);
   }
 
   private void assertEmptyInsteadOfNull(SonarRunnerBuilder builder) {
@@ -106,8 +121,8 @@ public class SonarRunnerBuilderTest {
     builder.populateConfiguration(argsBuilder, build, listener, env, null);
 
     assertThat(args.toStringWithQuote())
-        .contains("-Dsonar.projectBaseDir=" + moduleDir)
-        .contains("-Dproject.settings=" + projectSettings);
+      .contains("-Dsonar.projectBaseDir=" + moduleDir)
+      .contains("-Dproject.settings=" + projectSettings);
   }
 
   @Test
@@ -115,7 +130,6 @@ public class SonarRunnerBuilderTest {
     SonarInstallation installation = mock(SonarInstallation.class);
     when(installation.getServerUrl()).thenReturn("hostUrl");
     when(installation.getDatabaseUrl()).thenReturn("databaseUrl");
-    when(installation.getDatabaseDriver()).thenReturn("driver");
     when(installation.getDatabaseLogin()).thenReturn("login");
     when(installation.getDatabasePassword()).thenReturn("password");
     when(installation.getSonarLogin()).thenReturn("sonarlogin");
@@ -125,8 +139,8 @@ public class SonarRunnerBuilderTest {
     builder.populateConfiguration(argsBuilder, build, listener, env, installation);
 
     assertThat(args.toStringWithQuote())
-        .contains("-Dsonar.login=sonarlogin")
-        .contains("-Dsonar.password=sonarpassword");
+      .contains("-Dsonar.login=sonarlogin")
+      .contains("-Dsonar.password=sonarpassword");
   }
 
   /**
